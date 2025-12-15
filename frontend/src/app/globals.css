@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --brand-primary: #4f46e5; /* indigo-600 */
+  --brand-secondary: #0ea5e9; /* sky-500 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html { color-scheme: light; }
+
+/* Paksa tema terang agar kontras tetap kuat */
+body {
+  background: #f8fafc; /* tailwind gray-50 */
+  color: #0f172a;      /* tailwind slate-900 */
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Responsif dan cepat di perangkat sentuh */
+button, .btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+/* FullCalendar: jaga judul event tidak melebar keluar sel */
+.fc .fc-daygrid-event .fc-event-main {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc .fc-daygrid-event { /* pastikan kontainer tidak meluber */
+  overflow: hidden;
+  max-width: 100%;
+}
+.fc .fc-daygrid-day-events { overflow: hidden; }
+.fc .fc-daygrid-day-frame { overflow: hidden; }
+.fc .fc-daygrid-event .fc-event-main > div { /* HTML custom dari eventContent */
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc .fc-daygrid-event .fc-event-main .fcx-title {
+  font-size: 11px;
+  line-height: 1.1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc .fc-daygrid-event .fc-event-main .fcx-sub {
+  font-size: 10px;
+  line-height: 1.1;
+  color: #475569; /* slate-600 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Brand helpers */
+.brand-grad { background-image: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary)); }
+
+/* Auth page hero background: diagonal gradient + soft shapes */
+.auth-hero {
+  position: relative;
+  min-height: 100vh;
+  background: linear-gradient(140deg, #06b6d4 0%, #2563eb 55%, #7c3aed 100%);
+}
+
+/* Basic table styling for consistent alignment */
+.tbl { width: 100%; border-collapse: separate; border-spacing: 0; }
+.tbl-wrap { overflow: auto; border-radius: 8px; }
+.tbl thead th { position: sticky; top: 0; background: #fff; z-index: 10; text-align: left; font-weight: 600; color: #475569; padding: 10px 12px; border-bottom: 2px solid #e2e8f0; }
+.tbl tbody td { padding: 10px 12px; border-top: 1px solid #e5e7eb; vertical-align: middle; }
+.tbl tbody tr:nth-child(even) { background: #fafafa; }
+.tbl tbody tr:hover { background: #f1f5f9; }
+.tbl .col-id { width: 64px; }
+.tbl .col-actions { width: 220px; white-space: nowrap; }
+.auth-hero::before,
+.auth-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* subtle grid overlay */
+.auth-hero::before {
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(255,255,255,0.12), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(255,255,255,0.08), transparent 45%),
+    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.10), transparent 40%);
+  filter: blur(0.5px);
+}
+.auth-hero::after {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255,255,255,0.08),
+    rgba(255,255,255,0.08) 1px,
+    transparent 1px,
+    transparent 14px
+  );
+  opacity: .2;
+}
+.fc .fc-daygrid-event .fc-event-time,
+.fc .fc-daygrid-event .fc-event-title {
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+/* Responsive table cards for mobile (Admin Laporan, etc.) */
+@media (max-width: 640px) {
+  .tbl { display: block; font-size: 13px; }
+  .tbl thead { display: none; }
+  .tbl tbody { display: block; }
+  .tbl tbody tr { display: block; border: 1px solid #e5e7eb; border-radius: 10px; margin: 10px 0; background: #fff; overflow: hidden; }
+  .tbl tbody td { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 10px 12px; border-top: 1px solid #e5e7eb; }
+  .tbl tbody td:first-child { border-top: none; }
+  /* Label kolom hanya untuk tabel bertipe laporan */
+  .tbl-report tbody td::before { content: ""; font-weight: 600; color: #64748b; min-width: 110px; max-width: 45%; }
+  .tbl-report tbody td:nth-child(1)::before { content: "Judul"; }
+  .tbl-report tbody td:nth-child(2)::before { content: "Tanggal"; }
+  .tbl-report tbody td:nth-child(3)::before { content: "Status"; }
+  .tbl-report tbody td:nth-child(4)::before { content: "Aksi"; }
+  .tbl .col-actions { width: auto; white-space: normal; }
+  .tbl-report tbody td:nth-child(4) { flex-wrap: wrap; gap: 8px; }
+  .tbl-report tbody td:nth-child(4) a,
+  .tbl-report tbody td:nth-child(4) button {
+    flex: 0 0 auto;
+    min-width: 110px;
+    text-align: center;
+  }
+}

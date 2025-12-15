@@ -1,0 +1,236 @@
+"use client"
+import React, { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { authHeaders, fetchJson, apiBase } from '@/lib/api'
+
+type Asset = { id:number; assetCode:string; name:string; category:string|null; serialNumber:string|null; storeId:number|null; storeName:string|null; status:string; lastMaintenanceDate?:string|null; ageMonths?:number|null; isOld?:boolean }
+
+function fmtAge(m:number|null|undefined){ if(m==null) return '-'; const y=Math.floor(m/12), mo=m%12; return y>0?`${y} th ${mo} bl`:`${mo} bl` }
+const StatusBadge: React.FC<{status?:string}> = ({ status }) => {
+  const s = String(status||'').toLowerCase()
+  if (s==='in_repair' || s==='tidak') return <span className="text-red-600 font-semibold">Tidak</span>
+  if (s==='active' || s==='baik') return <span className="text-green-700 font-semibold">Baik</span>
+  return <span>-</span>
+}
+const IconButton: React.FC<{title:string; onClick?:()=>void; children: React.ReactNode}> = ({ title, onClick, children }) => (
+  <button title={title} aria-label={title} onClick={onClick} className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-gray-100 text-gray-600 hover:text-blue-700 border border-transparent hover:border-gray-200">
+    {children}
+  </button>
+)
+const PencilIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+)
+const HistoryIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 7 4.6"/><path d="M12 7v5l3 3"/></svg>
+)
+const CloseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+)
+const PlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+)
+
+export default function AssetsByUserPage({ params }: { params: { username: string } }){
+  const username = decodeURIComponent(params.username||'')
+  const [stores,setStores] = useState<any[]>([])
+  const [selStoreId,setSelStoreId] = useState<number|null>(null)
+  const [assets,setAssets] = useState<any[]>([])
+  const [q,setQ] = useState('')
+  const [oldOnly,setOldOnly] = useState(false)
+  const [loading,setLoading] = useState(false)
+  const [assetCounts,setAssetCounts] = useState<Record<number,number>>({})
+  const [showFallbackInfo,setShowFallbackInfo] = useState(false)
+  const [error,setError] = useState('')
+
+  // Modals state
+  const [showHistModal, setShowHistModal] = useState(false)
+  const [histAsset,setHistAsset] = useState<any|null>(null)
+  const [histList,setHistList] = useState<any[]>([])
+  const [histDate,setHistDate] = useState<string>('')
+  const [histNote,setHistNote] = useState<string>('')
+  const [histLoading,setHistLoading] = useState(false)
+  const [histSaving,setHistSaving] = useState(false)
+
+  const [showAgeModal,setShowAgeModal] = useState(false)
+  const [ageAsset,setAgeAsset] = useState<any|null>(null)
+  const [ageYears,setAgeYears] = useState<string>('')
+  const [agePurchaseDate,setAgePurchaseDate] = useState<string>('')
+
+  useEffect(()=>{ (async()=>{ try{ setError(''); const headers=authHeaders(); const all=await fetchJson('/stores',{headers}); const uname=(username||'').toLowerCase().trim(); const mine=(all||[]).filter((s:any)=> String(s.tsAssigned||'').toLowerCase().trim()===uname);
+    const used = (mine && mine.length>0) ? mine : (all||[])
+    setStores(used)
+    setShowFallbackInfo(!mine || mine.length===0)
+    if (!selStoreId && used.length>0) setSelStoreId(used[0].id)
+    const counts: Record<number,number> = {}
+    for (const s of used){ try { const res = await fetchJson(`/assets?storeId=${s.id}`, { headers }); counts[s.id] = Array.isArray(res)? res.length : 0 } catch { counts[s.id]=0 } }
+    setAssetCounts(counts)
+  }catch(e:any){ setError(String(e?.message||e)) } })() },[username])
+
+  const loadAssets = async ()=>{
+    if(!selStoreId) { setAssets([]); return }
+    setLoading(true)
+    try{
+      const headers=authHeaders(); const p=new URLSearchParams(); p.set('storeId', String(selStoreId)); if(q) p.set('q', q); if(oldOnly) p.set('oldOnly','true');
+      const res: Asset[] = await fetchJson(`/assets?${p.toString()}`,{headers});
+      const withHist = await Promise.all((res||[]).map(async (it:any)=>{
+        try { const h:any[] = await fetchJson(`/assets/${it.id}/history`, { headers }); const last = Array.isArray(h)&&h.length>0 ? h[0] : null; return { ...it, lastHistory: last ? `${new Date(last.date).toLocaleDateString()} · ${String(last.note||'').slice(0,80)}` : (it.lastMaintenanceDate ? new Date(it.lastMaintenanceDate).toLocaleDateString() : '-') }; }
+        catch { return { ...it, lastHistory: it.lastMaintenanceDate ? new Date(it.lastMaintenanceDate).toLocaleDateString() : '-' } }
+      }))
+      setAssets(withHist)
+    } finally { setLoading(false) }
+  }
+  useEffect(()=>{ loadAssets() },[selStoreId])
+
+  const filtered = useMemo(()=>assets, [assets])
+
+  function openAge(a:any){ setAgeAsset(a); setAgeYears(a.ageMonths!=null ? String(Math.floor((a.ageMonths as number)/12)) : ''); setAgePurchaseDate((a as any).purchaseDate || ''); setShowAgeModal(true) }
+  async function saveAge(){ if(!ageAsset) return; try{ const body:any={}; const years=Number(ageYears); if(Number.isFinite(years)&&years>=0){ body.ageSnapshotMonths=years*12; body.purchaseDate=null } if(agePurchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(agePurchaseDate)){ body.purchaseDate=agePurchaseDate } const res=await fetch(`${apiBase}/assets/${ageAsset.id}`,{ method:'PUT', headers: authHeaders(), body: JSON.stringify(body) }); if(!res.ok) throw new Error(await res.text()); setShowAgeModal(false); setAgeAsset(null); await loadAssets(); } catch(e:any){ alert('Gagal update usia: '+(e?.message||e)) } }
+
+  async function openHistory(a:any){ try{ setHistLoading(true); setShowHistModal(true); setHistAsset(a); setHistDate(new Date().toISOString().slice(0,10)); setHistNote(''); const headers=authHeaders(); const h:any[] = await fetchJson(`/assets/${a.id}/history`, { headers }); setHistList(Array.isArray(h)?h:[]); } catch(e:any){ setError('Gagal ambil history: '+(e?.message||e)) } finally { setHistLoading(false) } }
+  async function submitHistory(){ if(!histAsset) return; if(!histDate || !/^\d{4}-\d{2}-\d{2}$/.test(histDate)){ alert('Tanggal tidak valid'); return } try{ setHistSaving(true); const payload:any={ date: histDate, note: (histNote||'').trim() }; await fetch(`${apiBase}/assets/${histAsset.id}/history`, { method:'POST', headers: authHeaders(), body: JSON.stringify(payload) }); await openHistory(histAsset); await loadAssets(); } catch(e:any){ alert('Gagal menambah history: '+(e?.message||e)) } finally { setHistSaving(false) } }
+
+  const selStore = stores.find((s:any)=> s.id===selStoreId)
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm text-gray-500">
+          <Link href="/admin/assets" className="text-blue-600">Assets</Link>
+          <span> · {username}</span>
+          {selStore && <span> · {selStore.code ? `${selStore.code} - ${selStore.name}` : selStore.name}</span>}
+        </div>
+        <Link href="/admin/assets" className="text-blue-600">? Kembali</Link>
+      </div>
+
+      {showFallbackInfo && (
+        <div className="mb-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          Tidak ada store yang di-assign ke "{username}". Menampilkan semua store sebagai fallback.
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
+      )}
+
+      <div className="flex flex-wrap gap-2 items-end mb-3">
+        <div>
+          <label className="text-sm text-gray-500">Pilih Store</label>
+          <select className="border rounded px-2 py-1 block" value={selStoreId ?? ''} onChange={e=>setSelStoreId(e.target.value?Number(e.target.value):null)}>
+            <option value="">- pilih store -</option>
+            {stores.map((s:any)=> (
+              <option key={s.id} value={s.id}>{s.code? `${s.code} - ${s.name}` : s.name} ({assetCounts[s.id] ?? 0})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-sm text-gray-500">Cari</label>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="nama/kategori/SN" className="border rounded px-2 py-1 block"/>
+        </div>
+        <label className="inline-flex items-center gap-2">
+          <input type="checkbox" checked={oldOnly} onChange={e=>setOldOnly(e.target.checked)} />
+          <span>= 5 Tahun</span>
+        </label>
+        <button onClick={loadAssets} className="btn px-3 py-2 border rounded bg-blue-600 text-white">Terapkan</button>
+        {loading && <span className="text-sm text-gray-500">Memuat…</span>}
+      </div>
+
+      <div className="overflow-auto border rounded">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="text-left p-2">Hardware</th>
+              <th className="text-left p-2">Merk & SN</th>
+              <th className="text-left p-2">Kondisi</th>
+              <th className="text-left p-2">Usia</th>
+              <th className="text-left p-2">History</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((a:any) => (
+              <tr key={a.id} className="border-t">
+                <td className="p-2">{a.name}</td>
+                <td className="p-2">{a.serialNumber || '-'}</td>
+                <td className="p-2"><StatusBadge status={a.status} /></td>
+                <td className="p-2 relative">
+                  <span className="pr-8" title={a.ageMonths!=null?`${a.ageMonths} bulan`:''}>{a.isOld ? <span className="text-red-600 font-semibold">{fmtAge(a.ageMonths)}</span> : fmtAge(a.ageMonths)}</span>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <IconButton title="Edit usia" onClick={()=>openAge(a)}><PencilIcon/></IconButton>
+                  </div>
+                </td>
+                <td className="p-2 relative">
+                  <span className="block pr-8 truncate" title={a.lastHistory||''}>{a.lastHistory || '-'}</span>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <IconButton title="Kelola history" onClick={()=>openHistory(a)}><HistoryIcon/></IconButton>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length===0 && !loading && (
+              <tr><td className="p-3 text-gray-500" colSpan={5}>Pilih store / Tidak ada data</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {showHistModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={()=>setShowHistModal(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-[720px] max-w-[95%] p-4" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">History Perangkat — {histAsset?.name} {histAsset?.serialNumber?`(${histAsset.serialNumber})`:''}</div>
+              <IconButton title="Tutup" onClick={()=>setShowHistModal(false)}><CloseIcon/></IconButton>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-[140px_1fr_100px] gap-2 items-end mb-3">
+              <div>
+                <label className="text-xs text-gray-500">Tanggal</label>
+                <input type="date" className="border rounded px-2 py-1 w-full" value={histDate} onChange={e=>setHistDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Catatan</label>
+                <input className="border rounded px-2 py-1 w-full" placeholder="mis. Sedang perbaikan / Rusak" value={histNote} onChange={e=>setHistNote(e.target.value)} />
+              </div>
+              <div>
+                <button disabled={histSaving} className="px-3 py-2 bg-blue-600 text-white rounded w-full disabled:opacity-60 inline-flex items-center justify-center gap-1" onClick={submitHistory}><PlusIcon/> {histSaving? 'Menyimpan...' : 'Tambah'}</button>
+              </div>
+            </div>
+            <div className="max-h-64 overflow-auto border rounded">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50"><tr><th className="text-left p-2 w-36">Tanggal</th><th className="text-left p-2">Catatan</th></tr></thead>
+                <tbody>
+                  {histLoading ? (<tr><td className="p-2 text-gray-500" colSpan={2}>Memuat…</td></tr>) : (
+                    (histList||[]).map((h:any)=> (
+                      <tr key={h.id} className="border-t"><td className="p-2 whitespace-nowrap">{new Date(h.date).toLocaleDateString()}</td><td className="p-2">{h.note}</td></tr>
+                    ))
+                  )}
+                  {(!histList || histList.length===0) && !histLoading && (<tr><td className="p-2 text-gray-500" colSpan={2}>Belum ada history</td></tr>)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAgeModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={()=>setShowAgeModal(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-[520px] max-w-[95%] p-4" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Edit Usia — {ageAsset?.name} {ageAsset?.serialNumber?`(${ageAsset.serialNumber})`:''}</div>
+              <IconButton title="Tutup" onClick={()=>setShowAgeModal(false)}><CloseIcon/></IconButton>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm">Usia (tahun)</label>
+              <input className="border rounded px-2 py-1 w-full" placeholder="Mis. 3" value={ageYears} onChange={e=>setAgeYears(e.target.value)} />
+              <div className="text-xs text-gray-500">Atau isi tanggal pembelian di bawah.</div>
+              <label className="block text-sm">Tanggal Pembelian</label>
+              <input type="date" className="border rounded px-2 py-1 w-full" value={agePurchaseDate} onChange={e=>setAgePurchaseDate(e.target.value)} />
+            </div>
+            <div className="mt-3 flex gap-2 justify-end">
+              <button className="px-3 py-2 rounded border" onClick={()=>setShowAgeModal(false)}>Batal</button>
+              <button className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-60" disabled={histSaving} onClick={saveAge}>{histSaving?'Menyimpan...':'Simpan'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+

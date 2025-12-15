@@ -1,0 +1,134 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: maintenance_db
+    ports:
+    - 127.0.0.1:5432:5432
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:alpine
+    ports:
+    - 127.0.0.1:6379:6379
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  minio:
+    image: minio/minio
+    ports:
+    - 127.0.0.1:9002:9000
+    - 127.0.0.1:9003:9001
+    volumes:
+    - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:9000/minio/health/live
+      interval: 30s
+      timeout: 20s
+      retries: 5
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+    - 0.0.0.0:4010:4010
+    environment:
+    - NODE_ENV=production
+    - TZ=Asia/Jakarta
+    - UV_THREADPOOL_SIZE=16
+    - TRUST_PROXY=1
+    - POSTGRES_HOST=postgres
+    - POSTGRES_PORT=5432
+    - POSTGRES_USER=postgres
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    - POSTGRES_DB=maintenance_db
+    - PORT=4010
+    - JWT_SECRET=${JWT_SECRET}
+    - DB_SYNC=true
+    - CORS_ORIGINS=${CORS_ORIGINS}
+    - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    - TELEGRAM_GROUP_CHAT_ID=${TELEGRAM_GROUP_CHAT_ID}
+    - APP_PUBLIC_BASE=${APP_PUBLIC_BASE}
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - BODY_LIMIT=15mb
+    - REMINDER_T1_HOUR=${REMINDER_T1_HOUR}
+    - REMINDER_H0_HOUR=${REMINDER_H0_HOUR}
+    - REMINDER_TOLERANCE_MINUTES=${REMINDER_TOLERANCE_MINUTES}
+    - REMINDER_TEST_KEY=${REMINDER_TEST_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:4010/health
+      interval: 30s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+    - 0.0.0.0:3012:3002
+    environment:
+    - NODE_ENV=production
+    - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4010}
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:3002/
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  adminer:
+    image: adminer:4
+    ports:
+    - 0.0.0.0:8083:8080
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres_data:
+    external: true
+    name: maintenance_app_postgres_data
+  minio_data:
+    external: true
+    name: maintenance_app_minio_data
