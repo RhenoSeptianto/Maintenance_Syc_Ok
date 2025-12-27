@@ -120,33 +120,43 @@ export class MaintenanceController {
       return null;
     }
 
+    const storeName = (data as any).storeName ?? '-';
+    const maintenanceDate = new Date(data.date);
+    const maintenanceDateStr = maintenanceDate.toLocaleDateString();
+    const technicianName = (data as any).technician ?? '-';
+    const headerMarginLeft = (doc.page.margins?.left ?? 40);
+    const headerMarginTop = (doc.page.margins?.top ?? 40);
+    let cursorY = headerMarginTop;
+
     try {
       const logo = await loadLogoBuffer();
       if (logo) {
         drawWatermark();
-        const topY = 40;
-        const leftX = (doc.page.margins?.left ?? 40);
+        const topY = headerMarginTop;
+        const leftX = headerMarginLeft;
         doc.image(logo, leftX, topY, { fit: [70, 70] });
         // Title to the right of the logo
         const titleX = leftX + 80;
-        doc.fontSize(16).text('FORM MAINTENANCE STORE', titleX, topY + 10, { align: 'left' });
-        // Move cursor below header block
-        doc.moveTo(leftX, topY + 80);
-        doc.moveDown();
+        doc.fontSize(16).text('FORM MAINTENANCE STORE', titleX, topY + 20, { align: 'left' });
+        // Setelah header (logo + title), set cursor di bawahnya
+        cursorY = topY + 90;
       } else {
         doc.fontSize(16).text('FORM MAINTENANCE STORE', { align: 'center' });
-        doc.moveDown();
+        cursorY = doc.y + 10;
       }
     } catch {
       doc.fontSize(16).text('FORM MAINTENANCE STORE', { align: 'center' });
-      doc.moveDown();
+      cursorY = doc.y + 10;
     }
     drawWatermark();
-    doc.fontSize(10);
-    doc.text(`Nama Store: ${data.storeName ?? '-'}`);
-    doc.text(`Tanggal Maintenance: ${new Date(data.date).toLocaleDateString()}`);
-    doc.text(`Technical Support: ${data.technician ?? '-'}`);
-    doc.text(`Status: ${data.status}`);
+    // Posisikan cursor teks di bawah header lalu tulis meta info rapi, rata kiri
+    doc.fontSize(11);
+    doc.y = cursorY;
+    doc.x = headerMarginLeft;
+    doc.text(`Store   : ${storeName}`);
+    doc.text(`Tanggal : ${maintenanceDateStr}`);
+    doc.text(`TS      : ${technicianName}`);
+    doc.text(`Status  : ${data.status}`);
     doc.moveDown();
 
     let items: any[] = [];
