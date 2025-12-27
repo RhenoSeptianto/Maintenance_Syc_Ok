@@ -16,6 +16,8 @@ type Asset = {
   lastMaintenanceDate?: string | null
   lastHistoryDate?: string | null
   lastHistoryNote?: string | null
+  // urutan terakhir sesuai form maintenance (kolom "No")
+  lastMaintenanceOrder?: number | null
 }
 
 type AssetHistoryItem = { id: number; date: string; note: string; createdBy?: string | null }
@@ -94,14 +96,16 @@ export default function ClientAssetsByUserPage() {
       if (oldOnly) p.set('oldOnly', 'true')
       const res: Asset[] = await fetchJson(`/assets?${p.toString()}`, { headers })
       const withSn = (res || []).filter((it: any) => String(it?.serialNumber || '').trim() !== '')
-      const list = withSn.map((it: any) => ({
+      const list: Asset[] = withSn.map((it: any) => ({
         ...it,
         lastMaintenanceDate: it.lastMaintenanceDate || null,
       }))
-      list.sort((a: any, b: any) => {
-        const am = a?.ageMonths == null ? -1 : Number(a.ageMonths)
-        const bm = b?.ageMonths == null ? -1 : Number(b.ageMonths)
-        return bm - am
+      // Urutkan mengikuti nomor urut terakhir di form maintenance
+      list.sort((a, b) => {
+        const ao = (a.lastMaintenanceOrder ?? 9999)
+        const bo = (b.lastMaintenanceOrder ?? 9999)
+        if (ao !== bo) return ao - bo
+        return String(a.name || '').localeCompare(String(b.name || ''))
       })
       setAssets(list)
     } catch (e: any) {

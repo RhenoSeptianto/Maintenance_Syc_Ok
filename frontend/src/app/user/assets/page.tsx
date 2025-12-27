@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { authHeaders, fetchJson, apiBase } from '@/lib/api'
 
-type Asset = { id:number; name:string; category?:string|null; serialNumber?:string|null; status?:string; ageMonths?:number|null; isOld?:boolean; lastMaintenanceDate?:string|null; lastHistoryDate?:string|null; lastHistoryNote?:string|null }
+type Asset = { id:number; name:string; category?:string|null; serialNumber?:string|null; status?:string; ageMonths?:number|null; isOld?:boolean; lastMaintenanceDate?:string|null; lastHistoryDate?:string|null; lastHistoryNote?:string|null; lastMaintenanceOrder?:number|null }
 type AssetHistoryItem = { id:number; date:string; note:string; createdBy?:string|null }
 
 function fmtAge(m:number|null|undefined){ if(m==null) return '-'; const y=Math.floor(m/12), mo=m%12; return y>0?`${y} th ${mo} bl`:`${mo} bl` }
@@ -142,7 +142,14 @@ export default function UserAssets(){
     let arr = data
     const kw = q.trim().toLowerCase()
     if (kw) arr = arr.filter(a => (a.name||'').toLowerCase().includes(kw) || (a.category||'').toLowerCase().includes(kw) || (a.serialNumber||'').toLowerCase().includes(kw))
-    return arr
+    // Urutkan mengikuti nomor urut terakhir di form maintenance jika tersedia
+    const ordered = [...arr].sort((a:any, b:any) => {
+      const ao = (a.lastMaintenanceOrder ?? 9999)
+      const bo = (b.lastMaintenanceOrder ?? 9999)
+      if (ao !== bo) return ao - bo
+      return String(a.name || '').localeCompare(String(b.name || ''))
+    })
+    return ordered
   }, [data, q])
 
   return (

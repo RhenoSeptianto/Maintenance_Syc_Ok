@@ -672,6 +672,28 @@
         return { no:i+1, lokasi, hardware, sn, panduan, kondisi, keterangan:ket };
       }
     });
+    // Validasi: cegah SN duplikat dalam satu form
+    try{
+      const snMap = new Map(); // sn(lowercase) -> array nomor baris
+      for (const it of items){
+        const raw = String(it?.sn || '').trim();
+        if (!raw) continue;
+        const key = raw.toLowerCase();
+        const arr = snMap.get(key) || [];
+        arr.push(it.no || arr.length + 1);
+        snMap.set(key, arr);
+      }
+      const dup = [];
+      for (const [sn, rows] of snMap.entries()){
+        if (rows.length > 1){
+          dup.push(`${sn} (baris ${rows.join(', ')})`);
+        }
+      }
+      if (dup.length > 0){
+        alert('Terdapat SN yang sama pada form ini:\n' + dup.join('\n') + '\n\nPeriksa kembali dan pastikan setiap asset punya SN unik.');
+        return;
+      }
+    }catch{}
     const storeValue = String(inputStore.value||'');
     const storeLabel = (function(){
       try {

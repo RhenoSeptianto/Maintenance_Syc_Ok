@@ -117,6 +117,12 @@ export default function AdminDbPage() {
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [rebuildStoreId, setRebuildStoreId] = useState<string>('')
+  const [rebuildFromDate, setRebuildFromDate] = useState<string>('')
+  const [rebuildToDate, setRebuildToDate] = useState<string>('')
+  const [rebuildDryRun, setRebuildDryRun] = useState<boolean>(true)
+  const [rebuilding, setRebuilding] = useState(false)
+  const [rebuildResult, setRebuildResult] = useState<string>('')
 
   const currentTable = useMemo(() => tables.find(t => t.name === selected) || null, [tables, selected])
   const visibleColumns = useMemo(() => (currentTable?.columns || []).filter(c => !c.writeOnly), [currentTable])
@@ -228,6 +234,44 @@ export default function AdminDbPage() {
     }
   }
 
+  async function handleRebuildAssets() {
+    try {
+      setRebuilding(true)
+      setRebuildResult('')
+      const body: any = {
+        dryRun: rebuildDryRun,
+      }
+      if (rebuildStoreId.trim()) {
+        const sid = Number(rebuildStoreId.trim())
+        if (!Number.isFinite(sid) || sid <= 0) {
+          toast.error('Store ID harus berupa angka positif')
+          setRebuilding(false)
+          return
+        }
+        body.storeId = sid
+      }
+      if (rebuildFromDate) body.fromDate = rebuildFromDate
+      if (rebuildToDate) body.toDate = rebuildToDate
+      const res = await fetch(`${apiBase}/db-admin/maintenance/rebuild-assets`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        toast.error(text || 'Gagal menjalankan rebuild assets')
+        return
+      }
+      setRebuildResult(text)
+      toast.success(rebuildDryRun ? 'Dry-run rebuild selesai' : 'Rebuild assets selesai')
+    } catch (e: any) {
+      console.error(e)
+      toast.error(e?.message || 'Gagal menjalankan rebuild assets')
+    } finally {
+      setRebuilding(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="p-4 bg-white rounded shadow-sm border border-slate-200">
@@ -243,6 +287,64 @@ export default function AdminDbPage() {
             <button className="px-3 py-2 bg-white border rounded shadow-sm hover:bg-slate-50" onClick={()=>fetchRows(page, pageSize, search)}>Refresh</button>
             <button className="px-3 py-2 bg-blue-600 text-white rounded shadow-sm hover:brightness-110" onClick={startAdd}>Tambah data</button>
           </div>
+        </div>
+        <div className="mt-4 p-3 border border-dashed border-amber-300 rounded bg-amber-50">
+          <div className="flex flex-col md:flex-row md:items-end gap-3">
+            <div className="flex-1 grid md:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Store ID (opsional)</label>
+                <input
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  placeholder="Kosongkan untuk semua store"
+                  value={rebuildStoreId}
+                  onChange={e => setRebuildStoreId(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Dari tanggal (opsional)</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  value={rebuildFromDate}
+                  onChange={e => setRebuildFromDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Sampai tanggal (opsional)</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  value={rebuildToDate}
+                  onChange={e => setRebuildToDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-5 md:mt-6">
+                <input
+                  id="rebuild-dryrun"
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={rebuildDryRun}
+                  onChange={e => setRebuildDryRun(e.target.checked)}
+                />
+                <label htmlFor="rebuild-dryrun" className="text-xs text-slate-700 select-none">Dry run saja (tanpa ubah data)</label>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleRebuildAssets}
+                disabled={rebuilding}
+                className="px-3 py-2 bg-amber-600 text-white rounded shadow-sm hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+              >
+                {rebuilding ? 'Memproses...' : 'Rebuild Assets dari Maintenance'}
+              </button>
+            </div>
+          </div>
+          {rebuildResult && (
+            <pre className="mt-3 max-h-40 overflow-auto text-xs bg-white border border-amber-200 rounded p-2 text-slate-700 whitespace-pre-wrap">
+              {rebuildResult}
+            </pre>
+          )}
         </div>
         <div className="mt-3 grid md:grid-cols-3 gap-3">
           <div>
