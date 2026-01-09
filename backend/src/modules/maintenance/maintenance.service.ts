@@ -132,22 +132,6 @@ export class MaintenanceService {
     return saved;
   }
 
-  /**
-   * Ambil nama store untuk sebuah maintenance.
-   * Prioritas: field storeName di Maintenance, lalu lookup ke tabel Store via storeId.
-   */
-  async getStoreNameForMaintenance(m: Maintenance): Promise<string | null> {
-    try {
-      const fromSelf = (m as any).storeName as string | null | undefined;
-      if (fromSelf && fromSelf.trim()) return fromSelf.trim();
-      const sid = (m as any).storeId as number | null | undefined;
-      if (!sid) return null;
-      const store = await this.storeRepo.findOne({ where: { id: sid } });
-      if (store && store.name && store.name.trim()) return store.name.trim();
-    } catch {}
-    return null;
-  }
-
   findAll() {
     return this.repo.find({ order: { date: 'DESC' } });
   }

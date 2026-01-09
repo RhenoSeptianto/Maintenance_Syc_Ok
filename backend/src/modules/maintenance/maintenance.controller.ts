@@ -61,15 +61,21 @@ export class MaintenanceController {
     const data = await this.svc.findOne(idNum);
     if (!data) throw new NotFoundException('Maintenance not found');
     res.setHeader('Content-Type', 'application/pdf');
-    // Generate friendly filename based on store name, date, and MTC sequence (fallback to id)
-    let rawStore: string | null = null;
-    try {
-      rawStore = await this.svc.getStoreNameForMaintenance(data as any);
-    } catch {}
-    if (!rawStore) {
-      rawStore = (data as any).storeName || `store-${(data as any).storeId || id}`;
+    // Generate friendly filename based on maintenance title (Judul di UI),
+    // dengan tambahan tanggal dan kode MTC agar tetap unik.
+    let baseSource = String((data as any).title || '').trim();
+    if (!baseSource) {
+      // Fallback lama jika title kosong: gunakan nama store
+      let rawStore: string | null = null;
+      try {
+        rawStore = await this.svc.getStoreNameForMaintenance(data as any);
+      } catch {}
+      if (!rawStore) {
+        rawStore = (data as any).storeName || `maintenance-${id}`;
+      }
+      baseSource = String(rawStore || '').trim();
     }
-    let base = String(rawStore || '').trim();
+    let base = baseSource || `maintenance-${id}`;
     if (!base) base = `maintenance-${id}`;
     // Date part (YYYY-MM-DD)
     let datePart = '';
@@ -98,9 +104,27 @@ export class MaintenanceController {
     if (mtcSuffix) parts.push(mtcSuffix);
     const slug = parts.join('-').slice(0, 80);
     const filename = `${slug || `maintenance-${id}`}.pdf`;
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    try {
+      // Debug log: bantu cek penentuan nama file PDF
+      // (id, title, storeName, filename akhir)
+      // Bisa dihapus nanti kalau sudah yakin.
+      // eslint-disable-next-line no-console
+      console.log('[PDF]', {
+        id: idNum,
+        title: (data as any).title,
+        storeName: (data as any).storeName,
+        filename,
+      });
+    } catch {}
+    // Paksa browser memakai nama file ini saat download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    try {
+      // Set metadata title PDF supaya viewer juga mengenali judul yang sama
+      (doc as any).info = (doc as any).info || {};
+      (doc as any).info.Title = baseSource || filename;
+    } catch {}
     doc.pipe(res);
     const shouldWatermark = (()=>{
       const s = String((data as any).status || '').toLowerCase();

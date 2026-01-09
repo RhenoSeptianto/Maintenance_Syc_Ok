@@ -23,6 +23,7 @@ async function bootstrap() {
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
+    exposedHeaders: ['Content-Disposition','content-disposition'],
   });
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } } as any));
   const bodyLimit = process.env.BODY_LIMIT || '5mb';
