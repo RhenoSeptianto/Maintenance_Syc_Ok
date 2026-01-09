@@ -62,7 +62,13 @@ export class MaintenanceController {
     if (!data) throw new NotFoundException('Maintenance not found');
     res.setHeader('Content-Type', 'application/pdf');
     // Generate friendly filename based on store name, date, and MTC sequence (fallback to id)
-    const rawStore = (data as any).storeName || `store-${(data as any).storeId || id}`;
+    let rawStore: string | null = null;
+    try {
+      rawStore = await this.svc.getStoreNameForMaintenance(data as any);
+    } catch {}
+    if (!rawStore) {
+      rawStore = (data as any).storeName || `store-${(data as any).storeId || id}`;
+    }
     let base = String(rawStore || '').trim();
     if (!base) base = `maintenance-${id}`;
     // Date part (YYYY-MM-DD)
@@ -151,7 +157,11 @@ export class MaintenanceController {
       return null;
     }
 
-    const storeName = (data as any).storeName ?? '-';
+    let storeName = (data as any).storeName ?? '-';
+    try {
+      const resolved = await this.svc.getStoreNameForMaintenance(data as any);
+      if (resolved) storeName = resolved;
+    } catch {}
     const maintenanceDate = new Date(data.date);
     const maintenanceDateStr = maintenanceDate.toLocaleDateString();
     const technicianName = (data as any).technician ?? '-';

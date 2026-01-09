@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { Maintenance } from './maintenance.entity';
 import { AssetService } from '../asset/asset.service';
 import { Schedule } from '../schedule/schedule.entity';
+import { Store } from '../store/store.entity';
 
 @Injectable()
 export class MaintenanceService {
   constructor(
     @InjectRepository(Maintenance) private repo: Repository<Maintenance>,
     @InjectRepository(Schedule) private schedRepo: Repository<Schedule>,
+    @InjectRepository(Store) private storeRepo: Repository<Store>,
     private readonly assetSvc: AssetService,
   ) {}
 
@@ -46,6 +48,16 @@ export class MaintenanceService {
       }
       // Samakan tanggal payload ke tanggal jadwal
       (dto as any).date = new Date(sched.start);
+    }
+
+    // Jika ada storeId namun storeName belum terisi, auto-isi dari tabel Store
+    if ((dto as any).storeId && !(dto as any).storeName) {
+      try {
+        const store = await this.storeRepo.findOne({ where: { id: (dto as any).storeId } });
+        if (store && store.name) {
+          (dto as any).storeName = store.name;
+        }
+      } catch {}
     }
 
     // Parse detail items lebih awal untuk validasi (mis. duplikat SN)
@@ -118,6 +130,22 @@ export class MaintenanceService {
       }
     } catch {}
     return saved;
+  }
+
+  /**
+   * Ambil nama store untuk sebuah maintenance.
+   * Prioritas: field storeName di Maintenance, lalu lookup ke tabel Store via storeId.
+   */
+  async getStoreNameForMaintenance(m: Maintenance): Promise<string | null> {
+    try {
+      const fromSelf = (m as any).storeName as string | null | undefined;
+      if (fromSelf && fromSelf.trim()) return fromSelf.trim();
+      const sid = (m as any).storeId as number | null | undefined;
+      if (!sid) return null;
+      const store = await this.storeRepo.findOne({ where: { id: sid } });
+      if (store && store.name && store.name.trim()) return store.name.trim();
+    } catch {}
+    return null;
   }
 
   findAll() {
@@ -288,6 +316,36 @@ export class MaintenanceService {
       }
     }
     return saved;
+  }
+
+  /**
+   * Ambil nama store untuk sebuah maintenance.
+   * Prioritas:
+   * 1) field storeName di Maintenance
+   * 2) lookup tabel Store via storeId
+   * 3) jika ada scheduleId, ambil Schedule lalu storeId->Store
+   */
+  async getStoreNameForMaintenance(m: Maintenance): Promise<string | null> {
+    try {
+      const fromSelf = (m as any).storeName as string | null | undefined;
+      if (fromSelf && fromSelf.trim()) return fromSelf.trim();
+
+      const sid = (m as any).storeId as number | null | undefined;
+      if (sid) {
+        const store = await this.storeRepo.findOne({ where: { id: sid } });
+        if (store && store.name && store.name.trim()) return store.name.trim();
+      }
+
+      const schedId = (m as any).scheduleId as number | null | undefined;
+      if (schedId) {
+        const sched = await this.schedRepo.findOne({ where: { id: schedId } });
+        if (sched && sched.storeId) {
+          const store = await this.storeRepo.findOne({ where: { id: sched.storeId } });
+          if (store && store.name && store.name.trim()) return store.name.trim();
+        }
+      }
+    } catch {}
+    return null;
   }
 }
 
