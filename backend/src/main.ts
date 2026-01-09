@@ -9,10 +9,12 @@ async function bootstrap() {
   const originsEnv = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
   const defaultOrigins = ['http://localhost:3012', 'http://127.0.0.1:3012', 'http://frontend:3002'];
   const origins = (originsEnv.length > 0 ? originsEnv : defaultOrigins);
+  const allowAll = origins.includes('*');
   app.enableCors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
       try {
+        if (allowAll) return cb(null, true);
         const ok = origins.some(o => o === origin);
         cb(ok ? null : new Error('CORS blocked'), ok);
       } catch {

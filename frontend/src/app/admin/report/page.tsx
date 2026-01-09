@@ -213,6 +213,22 @@ export default function AdminReportPage(){
     if (!res.ok) { const t = await res.text().catch(()=> ''); alert(`Gagal mengunduh PDF: ${t||res.status}`); return }
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
-    window.open(url, '_blank')
-    setTimeout(()=> URL.revokeObjectURL(url), 10_000)
+
+    // Tentukan nama file dari header Content-Disposition (fallback ke id)
+    const cd = res.headers.get('content-disposition') || res.headers.get('Content-Disposition') || ''
+    let filename = `maintenance-${id}.pdf`
+    try {
+      const m = cd.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i)
+      if (m && m[1]) {
+        filename = decodeURIComponent(m[1].replace(/"/g,''))
+      }
+    } catch {}
+
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
   }

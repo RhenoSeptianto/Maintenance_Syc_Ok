@@ -61,7 +61,38 @@ export class MaintenanceController {
     const data = await this.svc.findOne(idNum);
     if (!data) throw new NotFoundException('Maintenance not found');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=maintenance-${id}.pdf`);
+    // Generate friendly filename based on store name, date, and MTC sequence (fallback to id)
+    const rawStore = (data as any).storeName || `store-${(data as any).storeId || id}`;
+    let base = String(rawStore || '').trim();
+    if (!base) base = `maintenance-${id}`;
+    // Date part (YYYY-MM-DD)
+    let datePart = '';
+    try {
+      const d = new Date((data as any).date);
+      if (!Number.isNaN(d.getTime())) {
+        datePart = d.toISOString().slice(0,10);
+      }
+    } catch {}
+    // MTC label for filename (MTC1, MTC2, ...)
+    let mtcSuffix = '';
+    try {
+      const seq = await this.svc.getYearlySequence(data as any);
+      if (seq && Number.isFinite(seq)) {
+        mtcSuffix = `MTC${seq}`;
+      }
+    } catch {}
+    // Normalize, remove accents, keep alphanumerics and dashes/underscores only
+    base = base
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `maintenance-${id}`;
+    const parts = [base];
+    if (datePart) parts.push(datePart);
+    if (mtcSuffix) parts.push(mtcSuffix);
+    const slug = parts.join('-').slice(0, 80);
+    const filename = `${slug || `maintenance-${id}`}.pdf`;
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
 
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
     doc.pipe(res);
@@ -153,10 +184,47 @@ export class MaintenanceController {
     doc.fontSize(11);
     doc.y = cursorY;
     doc.x = headerMarginLeft;
-    doc.text(`Store   : ${storeName}`);
-    doc.text(`Tanggal : ${maintenanceDateStr}`);
-    doc.text(`TS      : ${technicianName}`);
-    doc.text(`Status  : ${data.status}`);
+
+    // Hitung kode MTC (MTC1, MTC2, dst) per store per tahun
+    let mtcLabel: string | null = null;
+    try {
+      const seq = await this.svc.getYearlySequence(data as any);
+      if (seq && Number.isFinite(seq)) {
+        mtcLabel = `MTC ${seq}`;
+      }
+    } catch {
+      mtcLabel = null;
+    }
+
+    // Tulis meta info dengan kolom label yang rata (Store/Tanggal/TS/Kode MTC/Status)
+    const metaRows: { label: string; value: string }[] = [];
+    metaRows.push({ label: 'Store', value: String(storeName || '-') });
+    metaRows.push({ label: 'Tanggal', value: maintenanceDateStr });
+    metaRows.push({ label: 'TS', value: String(technicianName || '-') });
+    if (mtcLabel) {
+      metaRows.push({ label: 'Kode MTC', value: mtcLabel });
+    }
+    metaRows.push({ label: 'Status', value: String((data as any).status || '-') });
+
+    const labelX = headerMarginLeft;
+    // Ukur lebar label terpanjang untuk meratakan titik dua & nilai
+    doc.font('Helvetica').fontSize(11);
+    const maxLabelWidth = metaRows.reduce((w, row) => {
+      const lw = doc.widthOfString(row.label);
+      return lw > w ? lw : w;
+    }, 0);
+    const colonX = labelX + maxLabelWidth + 6;
+    const valueX = colonX + 6;
+
+    let metaY = doc.y;
+    for (const row of metaRows) {
+      doc.text(row.label, labelX, metaY);
+      doc.text(':', colonX, metaY);
+      doc.text(row.value, valueX, metaY);
+      metaY = doc.y; // baris berikutnya mulai setelah tinggi teks baris ini
+    }
+    // Pastikan posisi X kembali ke margin kiri sebelum judul "Detail Pekerjaan:"
+    doc.x = headerMarginLeft;
     doc.moveDown();
 
     let items: any[] = [];
@@ -199,7 +267,7 @@ export class MaintenanceController {
       items = out;
     }
     // Tabel detail pekerjaan
-    doc.text('Detail Pekerjaan:', { continued: false });
+    doc.text('Detail Pekerjaan:', headerMarginLeft, doc.y, { continued: false });
     doc.moveDown(0.3);
 
     // Gunakan margin aktual dari dokumen agar presisi lebar tabel = area konten

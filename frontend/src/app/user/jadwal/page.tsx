@@ -54,9 +54,13 @@ export default function UserJadwalPage(){
     const onCustom = () => { load() }
     window.addEventListener('storage', onStorage)
     window.addEventListener('schedule:updated', onCustom as any)
+    const iv = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load()
+    }, 30000)
     return () => {
       window.removeEventListener('storage', onStorage)
       window.removeEventListener('schedule:updated', onCustom as any)
+      window.clearInterval(iv)
     }
   },[])
 

@@ -64,12 +64,17 @@ export default function UserDashboardPage() {
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pageshow', onPageShow)
     window.addEventListener('storage', onStorage)
+    const iv = window.setInterval(() => {
+      if (!mounted) return
+      if (document.visibilityState === 'visible') load()
+    }, 30000)
     return () => {
       mounted = false
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pageshow', onPageShow)
       window.removeEventListener('storage', onStorage)
+      window.clearInterval(iv)
     }
   }, [load])
 
@@ -126,6 +131,11 @@ export default function UserDashboardPage() {
   const [rescheduleId, setRescheduleId] = useState<number | null>(null)
   const [rescheduleDate, setRescheduleDate] = useState<string>('')
 
+  function broadcastScheduleUpdate(){
+    try { localStorage.setItem('schedule_last_update', String(Date.now())) } catch {}
+    try { window.dispatchEvent(new Event('schedule:updated')) } catch {}
+  }
+
   function fmtDateYYYYMMDD(d: Date){
     const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0')
     return `${y}-${m}-${day}`
@@ -152,6 +162,7 @@ export default function UserDashboardPage() {
       // Optimistic update
       setSchedules(prev => prev.map(s => s.id===rescheduleId ? { ...s, start: newDate.toISOString() } as any : s))
       fetch(`${apiBase}/schedules`, { headers: authHeaders() }).then(r=>r.json()).then(js=> setSchedules(js||[])).catch(()=>{})
+      broadcastScheduleUpdate()
       setShowReschedule(false)
       setRescheduleId(null)
     }catch(e){
@@ -164,6 +175,16 @@ export default function UserDashboardPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Dashboard Saya</h2>
+        <button
+          type="button"
+          onClick={() => load()}
+          className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
+        >
+          Refresh Data
+        </button>
+      </div>
       <div className="grid md:grid-cols-3 gap-4">
         <div className="p-4 rounded-lg shadow bg-gradient-to-r from-cyan-500 to-blue-600 text-white flex items-center gap-3">
           <div className="w-9 h-9 rounded bg-white/90 flex items-center justify-center shadow-sm">

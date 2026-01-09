@@ -189,6 +189,32 @@ export class MaintenanceService {
     return saved;
   }
 
+  /**
+   * Hitung nomor urutan maintenance (MTC) per store per tahun.
+   * Contoh: maintenance pertama store A di 2026 => 1, kedua => 2, dst.
+   * Jika storeId atau date tidak ada, kembalikan null.
+   */
+  async getYearlySequence(m: Maintenance): Promise<number | null> {
+    if (!m.storeId || !m.date) return null;
+    const d = new Date(m.date as any);
+    if (Number.isNaN(d.getTime())) return null;
+    const year = d.getFullYear();
+    const yStart = new Date(year, 0, 1, 0, 0, 0, 0);
+    const yEnd = new Date(year + 1, 0, 1, 0, 0, 0, 0);
+
+    const list = await this.repo
+      .createQueryBuilder('x')
+      .where('x.storeId = :sid', { sid: m.storeId })
+      .andWhere('x.date >= :d0 AND x.date < :d1', { d0: yStart, d1: yEnd })
+      .orderBy('x.date', 'ASC')
+      .addOrderBy('x.id', 'ASC')
+      .getMany();
+
+    const idx = list.findIndex((row) => row.id === m.id);
+    if (idx === -1) return null;
+    return idx + 1;
+  }
+
   async updateStatus(id: number, status: 'approved' | 'rejected', approvedBy?: string) {
     const m = await this.repo.findOne({ where: { id } });
     if (!m) throw new NotFoundException('Maintenance not found');

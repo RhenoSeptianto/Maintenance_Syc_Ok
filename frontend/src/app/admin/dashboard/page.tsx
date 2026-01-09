@@ -16,6 +16,11 @@ export default function AdminDashboardPage() {
 
   // Gunakan apiBase bersama (mobile-friendly)
 
+  function broadcastScheduleUpdate(){
+    try { localStorage.setItem('schedule_last_update', String(Date.now())) } catch {}
+    try { window.dispatchEvent(new Event('schedule:updated')) } catch {}
+  }
+
   useEffect(() => {
     let mounted = true
     async function load() {
@@ -128,6 +133,7 @@ export default function AdminDashboardPage() {
       // Optionally refresh dari server
       const headers = authHeaders()
       fetch(`${apiBase}/schedules`, { headers }).then(r=>r.json()).then(js=> setSchedules(js||[])).catch(()=>{})
+      broadcastScheduleUpdate()
       setShowReschedule(false)
       setRescheduleId(null)
     }catch(e){
